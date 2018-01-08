@@ -36,6 +36,18 @@ class Hila5
     // byte[] seed = new byte[HILA5_SEED_LEN];
     // SecureRandom rand; rand.nextBytes(seed);
 
+    /* C->Java Translation between data types 
+       int32_t -> int
+       int16_t -> short
+       uint32_t -> int
+       uint16_t -> short
+       unsigned char[] -> byte[]
+       char -> byte
+       uint8_t -> byte
+     */
+
+    /* Original parameters in the C implementation are commented as the first line of the method, for reference */ 
+
 
     // == Rings and Number Theoratic Transforms ==================================
 
@@ -57,19 +69,130 @@ class Hila5
 
     // Scalar multiplication: v = c * v
     // Is v passed by reference? i.e. is it modified?
-    public static void smul(int[] v, int c)
+    public static void slow_smul(int[] v, int c)
     {
+	//(int32_t v[HILA5_N], int32_t c)
 	for (int i = 0; i < HILA5_N; i++)
 	    v[i] = (c * v[i]) % HILA5_Q;
     }
 
     // Pointwise multiplication: d = a (*) b.
-    public static void vmul(int[] d, int[] a, int[] b)
+    public static void slow_vmul(int[] d, int[] a, int[] b)
     {
+	//(int32_t d[HILA5_N], const int32_t a[HILA5_N], const int32_t b[HILA5_N])
 	for (int i = 0; i < HILA5_N; i++)
 	    d[i] = (a[i] * b[i]) % HILA5_Q;
     }
 
+    // Vector addition: d = a + b.
+    public static void slow_vadd(int[] d, int[] a, int[] b)
+    {
+	//(int32_t d[HILA5_N], const int32_t a[HILA5_N], const int32_t b[HILA5_N])
+	for (int i = 0; i < HILA5_N; i++)
+	    d[i] = (a[i] + b[i]) % HILA5_Q;
+    }
+
+    // reverse order of ten bits i.e. 0x200 -> 0x001 and vice versa
+    public static int bitrev10(int x)
+    {
+	//(int32_t x)
+	int t;
+	
+	x &= 0x3FF;                         // 9876543210 original order
+	x = (x << 5) | (x >> 5);            // 4321098765 5/5 bit swap
+	t = (x ^ (x >> 4)) & 0x021;
+	x ^= t ^ (t << 4);                  // 0321458769 outer bit swap
+	t = (x ^ (x >> 2)) & 0x042;
+	x ^= t ^ (t << 2);                  // 0123456789 inner bit swap
+	return x & 0x3FF;
+    }
+
+    // Slow polynomial ring multiplication: d = a * b  (mod x^1024 + 1)    
+    public static void slow_rmul(int[] d, int[] a, int[] b)
+    {
+	// (int32_t d[HILA5_N], const int32_t a[HILA5_N], const int32_t b[HILA5_N])
+	int x;
+	
+	for (int i = 0; i < HILA5_N; i++) {
+	    x = 0;
+	    for (int j = 0; j <= i; j++)            // positive side
+		x = (x + a[j] * b[i - j]) % HILA5_Q;
+	    for (int j = i + 1; j < HILA5_N; j++)   // negative wraparound
+		x = (x - a[j] * b[HILA5_N + i - j]) % HILA5_Q;
+	    // Force into positive [0, q-1] range ("constant time" masking)
+	    d[i] = x + (-((x >> 31) & 1) & HILA5_Q);
+	}
+    }    
+
+    // Slow number theoretic transform and scaling: d = c * NTT(v).    
+    public static void slow_ntt(int[] d, int[] v, int c)
+    {
+	// (int32_t d[HILA5_N], const int32_t v[HILA5_N], int32_t c)
+	int k, r;
+	int x;
+	
+	for (int i = 0; i < HILA5_N; i++) {
+	    r = 2 * bitrev10(i) + 1;        // bit reverse index
+	    x = 0;
+	    k = 0;
+	    for (int j = 0; j < HILA5_N; j++) {
+		x = (x + v[j] * pow1945[k]) % HILA5_Q;
+		k = (k + r) & 0x7FF;        // k = (j * r) % 2048 next round
+	    }
+	    d[i] = (c * x) % HILA5_Q;       // multiply with scalar c
+	}
+    }
+
+// == Encoding and Decoding of Ring Polynomials ==============================
+
+// 14-bit packing; mod q integer vector v[1024] to byte sequence d[1792]
+    public static void hila5_pack14(int[] d, int[] v)
+    {
+	//(uint8_t d[HILA5_PACKED14], const int32_t v[HILA5_N])
+	/* Do we lose information by copying a value of v[] into d[]?
+	   Change d from byte[] to int[] */
+	int x, y;
+
+	for (int i = 0, j = 0; i < HILA5_N;) {
+	    x = v[i++];
+	    d[j++] = x;
+	    y = v[i++];
+	    d[j++] = (x >> 8) | (y << 6);
+	    d[j++] = y >> 2;
+	    x = v[i++];
+	    d[j++] = (y >> 10) | (x << 4);
+	    d[j++] = x >> 4;
+	    y = v[i++];
+	    d[j++] = (x >> 12) | (y << 2);
+	    d[j++] = y >> 6;
+	}
+    }
+
+    // 14-bit unpacking; bytes in d[1792] to integer vector v[1024]
+    public static void hila5_unpack14(int[] v, byte[] d)
+    {
+	//(int32_t v[HILA5_N], const uint8_t seed[HILA5_SEED_LEN])
+	int x;
+
+	for (int i = 0, j = 0; i < HILA5_N;) {
+	    x = d[j++];
+	    x |= (((int) d[j++]) << 8);
+	    v[i++] = x & 0x3FFF;
+	    x >>= 14;
+	    x |= (((int) d[j++]) << 2);
+	    x |= (((int) d[j++]) << 10);
+	    v[i++] = x & 0x3FFF;
+	    x >>= 14;
+	    x |= (((int) d[j++]) << 4);
+	    x |= (((int) d[j++]) << 12);
+	    v[i++] = x & 0x3FFF;
+	    x >>= 14;
+	    x |= (((int) d[j++]) << 6);
+	    v[i++] = x;
+	}
+    }
+
+    
     
     public static void keygen(SecureRandom rand, byte[] send, short[] sk)
     {
