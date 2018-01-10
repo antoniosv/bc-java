@@ -192,7 +192,37 @@ class Hila5
 	}
     }
 
-    
+// == Random Samplers =======================================================
+
+// generate n uniform samples from the seed
+//commented because hila5_sha3_ctx_t is not implemented yet 
+static void hila5_parse(int[] v, short[] seed)
+{
+    // (int32_t v[HILA5_N], const uint8_t seed[HILA5_SEED_LEN])
+    Hila5Sha3CtxT sha3;              // init SHA3 state for SHAKE-256
+    short[] buf = new short[2];                     // two byte output buffer
+    int x;                          // random variable
+
+    // hila5_shake256_init(&sha3);         // initialize the context
+    // hila5_shake_update(&sha3, seed, HILA5_SEED_LEN);    // seed input
+    // hila5_shake_xof(&sha3);             // pad context to output mode
+
+    // // fill the vector with uniform samples
+    // for (int i = 0; i < HILA5_N; i++) {
+    //     do {                            // rejection sampler
+    //         hila5_shake_out(&sha3, buf, 2); // two bytes from SHAKE-256
+    //         x = ((uint32_t) buf[0]) + (((uint32_t) buf[1]) << 8); // endianess
+    //     } while (x >= 5 * HILA5_Q);     // reject
+    //     v[i] = x;                       // reduction (mod q) unnecessary
+    // }
+}    
+
+    static void sha3(byte[] sharedKey)
+    {
+        SHA3Digest d = new SHA3Digest(256);
+        d.update(sharedKey, 0, 32);
+        d.doFinal(sharedKey, 0);
+    }
     
     public static void keygen(SecureRandom rand, byte[] send, short[] sk)
     {
@@ -234,11 +264,5 @@ class Hila5
         //Poly.uniform(a, seed);
 	return;
     }
-    
-    static void sha3(byte[] sharedKey)
-    {
-        SHA3Digest d = new SHA3Digest(256);
-        d.update(sharedKey, 0, 32);
-        d.doFinal(sharedKey, 0);
-    }
+
 }
