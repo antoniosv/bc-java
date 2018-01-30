@@ -3,6 +3,7 @@ package org.bouncycastle.pqc.crypto.hila5;
 import java.security.SecureRandom;
 
 import org.bouncycastle.crypto.digests.SHA3Digest;
+import org.bouncycastle.pqc.crypto.newhope.Poly;
 
 /**
  * This implementation is based heavily on the C reference implementation from https://github.com/mjosaarinen/hila5/.
@@ -54,6 +55,7 @@ class Hila5
     static int[] pow1945 = new int[2048];  //powers of g=1945 mod q
     static boolean pow1945_ok = false;  //true after initialization
 
+    // vector needed to convert from Poly to NTT and viceversa
     public static void init_pow1945()
     {
 	if (pow1945_ok)                     // nothing to do then
@@ -192,31 +194,31 @@ class Hila5
 	}
     }
 
-// == Random Samplers =======================================================
+    // == Random Samplers =======================================================
 
-// generate n uniform samples from the seed
-//commented because hila5_sha3_ctx_t is not implemented yet 
-static void hila5_parse(int[] v, short[] seed)
-{
-    // (int32_t v[HILA5_N], const uint8_t seed[HILA5_SEED_LEN])
-    Hila5Sha3CtxT sha3;              // init SHA3 state for SHAKE-256
-    short[] buf = new short[2];                     // two byte output buffer
-    int x;                          // random variable
-
-    // hila5_shake256_init(&sha3);         // initialize the context
-    // hila5_shake_update(&sha3, seed, HILA5_SEED_LEN);    // seed input
-    // hila5_shake_xof(&sha3);             // pad context to output mode
-
-    // // fill the vector with uniform samples
-    // for (int i = 0; i < HILA5_N; i++) {
-    //     do {                            // rejection sampler
-    //         hila5_shake_out(&sha3, buf, 2); // two bytes from SHAKE-256
-    //         x = ((uint32_t) buf[0]) + (((uint32_t) buf[1]) << 8); // endianess
-    //     } while (x >= 5 * HILA5_Q);     // reject
-    //     v[i] = x;                       // reduction (mod q) unnecessary
-    // }
-}    
-
+    // generate n uniform samples from the seed
+    //commented because hila5_sha3_ctx_t is not implemented yet 
+    static void hila5_parse(int[] v, short[] seed)
+    {
+	// (int32_t v[HILA5_N], const uint8_t seed[HILA5_SEED_LEN])
+	Hila5Sha3CtxT sha3;              // init SHA3 state for SHAKE-256
+	short[] buf = new short[2];                     // two byte output buffer
+	int x;                          // random variable
+	
+	// hila5_shake256_init(&sha3);         // initialize the context
+	// hila5_shake_update(&sha3, seed, HILA5_SEED_LEN);    // seed input
+	// hila5_shake_xof(&sha3);             // pad context to output mode
+	
+	// // fill the vector with uniform samples
+	// for (int i = 0; i < HILA5_N; i++) {
+	//     do {                            // rejection sampler
+	//         hila5_shake_out(&sha3, buf, 2); // two bytes from SHAKE-256
+	//         x = ((uint32_t) buf[0]) + (((uint32_t) buf[1]) << 8); // endianess
+	//     } while (x >= 5 * HILA5_Q);     // reject
+	//     v[i] = x;                       // reduction (mod q) unnecessary
+	// }
+    }
+        
     static void sha3(byte[] sharedKey)
     {
         SHA3Digest d = new SHA3Digest(256);
@@ -224,8 +226,46 @@ static void hila5_parse(int[] v, short[] seed)
         d.doFinal(sharedKey, 0);
     }
     
-    public static void keygen(SecureRandom rand, byte[] send, short[] sk)
+    public static void keygen(SecureRandom rand, byte[] pk, short[] sk)
     {
+	byte[] seed = new byte[Params.SEED_BYTES];
+	rand.nextBytes(seed);	
+	short[] a, e, t, r;
+
+	// initialize pow1945 array for NTT
+	//init_pow1945();
+
+	// create 32-byte secret key sk
+	sha3(seed); // hash the randomness
+	a = new short[HILA5_N];
+	generateA(a, seed);
+
+	/* 
+	 * creation of public key pk
+	 */
+
+	// generates random noise from distribution
+	byte[] noiseSeed = new byte[HILA5_N];
+	rand.nextBytes(noiseSeed);
+	Poly.getNoise(sk, noiseSeed, (byte)0);
+	// converts polynomial sk into NTT representation
+	Poly.toNTT(sk);
+
+	e = new short[HILA5_N];
+	Poly.getNoise(e, noiseSeed, (byte)1);
+	Poly.toNTT(e);
+
+	// this is where the result of multiplication is stored
+	t = new short[Params.N];
+        Poly.pointWise(a, sk, t);
+
+	// final result of addition stored in r
+        r = new short[Params.N];
+        Poly.add(t, e, r);
+
+	// encodes the pk in NTT
+        encodeA(pk, r, seed);
+	
 	return;
     }
 
@@ -251,7 +291,8 @@ static void hila5_parse(int[] v, short[] seed)
 
     static void encodeA(byte[] r, short[] pk, byte[] seed)
     {
-	return;
+	Poly.toBytes(r, pk);
+	System.arraycopy(seed, 0, r, Params.POLY_BYTES, Params.SEED_BYTES);        
     }
 
     static void encodeB(byte[] r, short[] b, short[] c)
@@ -259,9 +300,10 @@ static void hila5_parse(int[] v, short[] seed)
 	return;
     }
 
-        static void generateA(short[] a, byte[] seed)
+    // generates the secret 'a'
+    static void generateA(short[] a, byte[] seed)
     {
-        //Poly.uniform(a, seed);
+        Poly.uniform(a, seed);
 	return;
     }
 

@@ -3,9 +3,9 @@ package org.bouncycastle.pqc.crypto.newhope;
 import org.bouncycastle.crypto.digests.SHAKEDigest;
 import org.bouncycastle.util.Pack;
 
-class Poly
+public class Poly
 {
-    static void add(short[] x, short[] y, short[] z)
+    public static void add(short[] x, short[] y, short[] z)
     {
         for (int i = 0; i < Params.N; ++i)
         {
@@ -13,7 +13,7 @@ class Poly
         }
     }
 
-    static void fromBytes(short[] r, byte[] a)
+    public static void fromBytes(short[] r, byte[] a)
     {
         for (int i = 0; i < Params.N / 4; ++i)
         {
@@ -29,14 +29,14 @@ class Poly
         }
     }
 
-    static void fromNTT(short[] r)
+    public static void fromNTT(short[] r)
     {
         NTT.bitReverse(r);
         NTT.core(r, Precomp.OMEGAS_INV_MONTGOMERY);
         NTT.mulCoefficients(r, Precomp.PSIS_INV_MONTGOMERY);
     }
 
-    static void getNoise(short[] r, byte[] seed, byte nonce)
+    public static void getNoise(short[] r, byte[] seed, byte nonce)
     {
         byte[] iv = new byte[8];
         iv[0] = nonce;
@@ -60,7 +60,7 @@ class Poly
         }
     }
 
-    static void pointWise(short[] x, short[] y, short[] z)
+    public static void pointWise(short[] x, short[] y, short[] z)
     {
         for (int i = 0; i < Params.N; ++i)
         {
@@ -70,7 +70,7 @@ class Poly
         }
     }
 
-    static void toBytes(byte[] r, short[] p)
+    public static void toBytes(byte[] r, short[] p)
     {
         for (int i = 0; i < Params.N / 4; ++i)
         {
@@ -93,13 +93,13 @@ class Poly
         }
     }
 
-    static void toNTT(short[] r)
+    public static void toNTT(short[] r)
     {
         NTT.mulCoefficients(r, Precomp.PSIS_BITREV_MONTGOMERY); 
         NTT.core(r, Precomp.OMEGAS_MONTGOMERY);
     }
 
-    static void uniform(short[] a, byte[] seed)
+    public static void uniform(short[] a, byte[] seed)
     {
         SHAKEDigest xof = new SHAKEDigest(128);
         xof.update(seed, 0, seed.length);
