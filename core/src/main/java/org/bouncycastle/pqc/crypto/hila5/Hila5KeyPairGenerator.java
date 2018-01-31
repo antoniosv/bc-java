@@ -24,12 +24,11 @@ public class Hila5KeyPairGenerator
     public AsymmetricCipherKeyPair generateKeyPair()
     {
         byte[] pubData = new byte[Hila5.HILA5_PUBKEY_LEN];
-        short[] secData = new short[Hila5.HILA5_PRIVKEY_LEN];
+        short[] secData = new short[Hila5.HILA5_PRIVKEY_LEN]; // was short[]
 
 	Hila5.keygen(random, pubData, secData);
 
         return new AsymmetricCipherKeyPair(new NHPublicKeyParameters(pubData), new NHPrivateKeyParameters(secData));
     }
-
 
 }

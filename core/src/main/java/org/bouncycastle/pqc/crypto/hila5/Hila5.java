@@ -202,10 +202,10 @@ class Hila5
     {
 	// (int32_t v[HILA5_N], const uint8_t seed[HILA5_SEED_LEN])
 	Hila5Sha3CtxT sha3;              // init SHA3 state for SHAKE-256
-	short[] buf = new short[2];                     // two byte output buffer
+	byte[] buf = new byte[2];                     // two byte output buffer
 	int x;                          // random variable
 	
-	// hila5_shake256_init(&sha3);         // initialize the context
+	// hila5_shake256_init(sha3);         // initialize the context
 	// hila5_shake_update(&sha3, seed, HILA5_SEED_LEN);    // seed input
 	// hila5_shake_xof(&sha3);             // pad context to output mode
 	
@@ -218,6 +218,26 @@ class Hila5
 	//     v[i] = x;                       // reduction (mod q) unnecessary
 	// }
     }
+
+    public static void hila5_psi16(int[] v)
+    {
+	SecureRandom rand = new SecureRandom();
+	byte[] y = new byte[4];                     
+	int x;                               // 32-bit variable
+	for (int i = 0; i < HILA5_N; i++) {
+	    rand.nextBytes(y); // get 4 random bytes
+	    // randombytes((unsigned char *) &x, sizeof(x));   
+	    x = y[0];
+	    x -= (x >> 1) & 0x55555555;     // Hamming weight
+	    x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
+	    x = (x + (x >> 4)) & 0x0F0F0F0F;
+	    x += x >> 8;
+	    x = (x + (x >> 16)) & 0x3F;
+	    
+	    x -= 16;                        // Make signed in range [0, q-1]
+	    v[i] = x + (-((x >> 31) & 1) & HILA5_Q);    // "constant time"
+	}
+    }    
         
     static void sha3(byte[] sharedKey)
     {
@@ -225,8 +245,36 @@ class Hila5
         d.update(sharedKey, 0, 32);
         d.doFinal(sharedKey, 0);
     }
-    
+
     public static void keygen(SecureRandom rand, byte[] pk, short[] sk)
+    {
+	int[] a, e, t;
+	a = new int[HILA5_N];
+	e = new int[HILA5_N];
+	t = new int[HILA5_N];
+
+	init_pow1945();                     // make sure initialized
+
+	// Create secret key
+	hila5_psi16(t);                     // (t is a temporary variable)
+	slow_ntt(a, t, 27);                 // a = 3**3 * NTT(Psi_16)
+	
+        // Public key 
+	hila5_psi16(t);                     // t = Psi_16
+	slow_ntt(e, t, 27);                 // e = 3**3 * NTT(Psi_16) -- noise
+	byte[] pk = new byte[HILA5_SEED_LEN];
+	rand.nextBytes(pk);                 // Random seed for g
+	// hila5_parse(t, pk);                 // (t =) g = parse(seed)
+	// slow_vmul(t, a, t);
+	// slow_vadd(t, t, e);                 // A = NTT(g * a + e)
+	// hila5_pack14(pk + HILA5_SEED_LEN, t);   // pk = seed | A
+	
+	// hila5_pack14(sk, a);                // pack secret key
+	// // SHA3 hash of pubic key is stored with secret key due to API limitation
+	// hila5_sha3(pk, HILA5_PUBKEY_LEN, sk + HILA5_PACKED14, 32);	
+    }
+    
+    public static void nh_keygen(SecureRandom rand, byte[] pk, short[] sk)
     {
 	byte[] seed = new byte[Params.SEED_BYTES];
 	rand.nextBytes(seed);	
