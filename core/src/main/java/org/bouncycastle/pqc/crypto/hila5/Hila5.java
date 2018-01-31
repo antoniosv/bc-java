@@ -198,7 +198,7 @@ class Hila5
 
     // generate n uniform samples from the seed
     //commented because hila5_sha3_ctx_t is not implemented yet 
-    static void hila5_parse(int[] v, short[] seed)
+    static void hila5_parse(int[] v, byte[] seed)
     {
 	// (int32_t v[HILA5_N], const uint8_t seed[HILA5_SEED_LEN])
 	Hila5Sha3CtxT sha3;              // init SHA3 state for SHAKE-256
@@ -262,9 +262,9 @@ class Hila5
         // Public key 
 	hila5_psi16(t);                     // t = Psi_16
 	slow_ntt(e, t, 27);                 // e = 3**3 * NTT(Psi_16) -- noise
-	byte[] pk = new byte[HILA5_SEED_LEN];
+	pk = new byte[HILA5_SEED_LEN];
 	rand.nextBytes(pk);                 // Random seed for g
-	// hila5_parse(t, pk);                 // (t =) g = parse(seed)
+	hila5_parse(t, pk);                 // (t =) g = parse(seed)
 	// slow_vmul(t, a, t);
 	// slow_vadd(t, t, e);                 // A = NTT(g * a + e)
 	// hila5_pack14(pk + HILA5_SEED_LEN, t);   // pk = seed | A
